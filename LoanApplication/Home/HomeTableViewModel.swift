@@ -11,8 +11,9 @@ struct HomeTableViewModel {
     let name: String?
     let loanAmount: String?
     let dateSubmitted: String?
+    let isComplete: Bool
     
-    init(name: String?, loanAmount: Decimal?, dateSubmitted: Date?) {
+    init(name: String?, loanAmount: Decimal?, dateSubmitted: Date?, isComplete: Bool) {
         self.name = name
         if let loanAmount {
             self.loanAmount = Self.amountFormatter.string(from: NSDecimalNumber(decimal: loanAmount))
@@ -24,6 +25,7 @@ struct HomeTableViewModel {
         } else {
             self.dateSubmitted = nil
         }
+        self.isComplete = isComplete
     }
     
     private static let amountFormatter = {

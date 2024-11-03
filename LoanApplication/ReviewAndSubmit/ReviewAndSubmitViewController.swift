@@ -7,16 +7,18 @@
 
 import UIKit
 class ReviewAndSubmitViewController: UIViewController {
-    private let personalInformationTitle: Label = Label(font: .preferredFont(forTextStyle: .title2))
+    private let personalInformationTitle = Label(font: .preferredFont(forTextStyle: .title2))
+    private let personalInformationEditButton = RoundedButton(title: "Edit Personal Information")
     private let fullNameField = TextFieldComponent(title: "Full Name", isEnabled: false)
     private let emailAddressField = TextFieldComponent(title: "Email Address", isEnabled: false)
     private let phoneNumberField = TextFieldComponent(title: "Phone Number", isEnabled: false)
-    private let genderField = TextFieldComponent(title: "Gender", placeholder: "", isEnabled: false)
+    private let genderField = GenderFieldComponent(title: "Gender", placeholder: "", isEnabled: false)
     private let addressField = TextFieldComponent(title: "Address", placeholder: "", isEnabled: false)
     
-    private let financialInformationTitle: Label = Label(font: .preferredFont(forTextStyle: .title2))
-    private let annualIncomeField: TextFieldComponent = TextFieldComponent(title: "Annual Income", isEnabled: false)
-    private let desiredLoanAmountField: TextFieldComponent = TextFieldComponent(title: "Desired Loan Amount", isEnabled: false)
+    private let financialInformationTitle = Label(font: .preferredFont(forTextStyle: .title2))
+    private let financialInformationEditButton = RoundedButton(title: "Edit Financial Information")
+    private let annualIncomeField: CurrencyFieldComponent = CurrencyFieldComponent(title: "Annual Income", isEnabled: false)
+    private let desiredLoanAmountField: CurrencyFieldComponent = CurrencyFieldComponent(title: "Desired Loan Amount", isEnabled: false)
     private let irdNumberField: TextFieldComponent = TextFieldComponent(title: "IRD Number", isEnabled: false)
     
     private let finishButton = {
@@ -34,39 +36,74 @@ class ReviewAndSubmitViewController: UIViewController {
     
     private var loan: Loan
     
+    private let scrollView: UIScrollView = UIScrollView()
+    
+    private lazy var bottomContentStack = StackView(arrangedSubviews: [finishButton, progressIndicator], axis: .vertical)
+    
     private func setupSubviews() {
         title = "Review and Submit"
         personalInformationTitle.text = "Personal Information"
         financialInformationTitle.text = "Financial Information"
+        
         view.backgroundColor = .systemBackground
         
-        let verticalStack = StackView(arrangedSubviews: [personalInformationTitle, fullNameField, emailAddressField, phoneNumberField, genderField, addressField, financialInformationTitle, annualIncomeField, desiredLoanAmountField, irdNumberField], axis: .vertical)
+        let verticalStack = StackView(arrangedSubviews: [personalInformationTitle, fullNameField, emailAddressField, phoneNumberField, genderField, addressField, personalInformationEditButton, financialInformationTitle, annualIncomeField, desiredLoanAmountField, irdNumberField, financialInformationEditButton], axis: .vertical)
+        verticalStack.setCustomSpacing(16.0, after: personalInformationEditButton)
         
-        view.addSubview(verticalStack)
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(verticalStack)
         
-        let bottomContentStack = StackView(arrangedSubviews: [finishButton, progressIndicator], axis: .vertical)
         view.addSubview(bottomContentStack)
+        bottomContentStack.backgroundColor = .systemBackground
+        bottomContentStack.layer.shadowColor = UIColor.label.cgColor
+        bottomContentStack.layer.shadowOpacity = 0.1
         
         NSLayoutConstraint.activate([
-            view.safeAreaLayoutGuide.topAnchor.constraint(equalTo: verticalStack.topAnchor),
-            view.safeAreaLayoutGuide.leadingAnchor.constraint(equalTo: verticalStack.leadingAnchor),
-            view.safeAreaLayoutGuide.trailingAnchor.constraint(equalTo: verticalStack.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            
+            verticalStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            verticalStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            verticalStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            verticalStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            
+            verticalStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
             
             bottomContentStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             bottomContentStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
-            bottomContentStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            bottomContentStack.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         
         finishButton.addTarget(self, action: #selector(finishLoan), for: .touchUpInside)
         
-        fullNameField.text = loan.fullName
-        emailAddressField.text = loan.emailAddress
-        phoneNumberField.text = loan.phoneNumber
-        genderField.text = loan.gender?.rawValue
-        addressField.text = loan.address
-        annualIncomeField.text = loan.annualIncome?.description
-        desiredLoanAmountField.text = loan.desiredLoanAmount?.description
-        irdNumberField.text = loan.irdNumber
+        fullNameField.value = loan.fullName
+        emailAddressField.value = loan.emailAddress
+        phoneNumberField.value = loan.phoneNumber
+        genderField.value = loan.gender
+        addressField.value = loan.address
+        annualIncomeField.value = loan.annualIncome
+        desiredLoanAmountField.value = loan.desiredLoanAmount
+        irdNumberField.value = loan.irdNumber
+        
+        personalInformationEditButton.addTarget(self, action: #selector(editPersonalInformation), for: .touchUpInside)
+        financialInformationEditButton.addTarget(self, action: #selector(editFinancialInformation), for: .touchUpInside)
+    }
+    
+    @objc func editPersonalInformation() {
+        guard let viewController = navigationController?.viewControllers.first(where: { type(of: $0) == PersonalInformationViewController.self }) else {
+            return
+        }
+        navigationController?.popToViewController(viewController, animated: true)
+    }
+    
+    @objc func editFinancialInformation() {
+        guard let viewController = navigationController?.viewControllers.first(where: { type(of: $0) == FinancialInformationViewController.self }) else {
+            return
+        }
+        navigationController?.popToViewController(viewController, animated: true)
     }
     
     @objc func finishLoan() {
@@ -74,6 +111,13 @@ class ReviewAndSubmitViewController: UIViewController {
         loan.isComplete = true
         Model.saveLoan(loan)
         navigationController?.dismiss(animated: true)
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let bottomInset = bottomContentStack.bounds.height - bottomContentStack.safeAreaInsets.bottom
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+        scrollView.scrollIndicatorInsets = scrollView.contentInset
     }
     
     init(loan: Loan) {

@@ -20,18 +20,6 @@ class View: UIView {
     }
 }
 
-class TextField: UITextField {
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        translatesAutoresizingMaskIntoConstraints = false
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        translatesAutoresizingMaskIntoConstraints = false
-    }
-}
-
 class TableView: UITableView {
     override init(frame: CGRect = .zero, style: UITableView.Style = .grouped) {
         super.init(frame: frame, style: style)

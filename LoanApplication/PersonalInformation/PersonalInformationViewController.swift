@@ -11,6 +11,10 @@ enum ValidationError: LocalizedError {
     case emailInvalid
     case phoneNumberInvalid
     case genderInvalid
+    case loanExceedsLimit
+    case incomeInvalid
+    case loanAmountInvalid
+    case irdNumberInvalid
     
     var errorDescription: String? {
         switch self {
@@ -25,16 +29,50 @@ enum ValidationError: LocalizedError {
             
         case .genderInvalid:
             return "Please select a gender"
+            
+        case .loanExceedsLimit:
+            return "Loan cannot exceed 50% of annual income"
+            
+        case .incomeInvalid:
+            return "Annual income cannot be empty"
+            
+        case .loanAmountInvalid:
+            return "Loan amount cannot be empty"
+            
+        case .irdNumberInvalid:
+            return "IRD number needs to be in a valid format, for 8 digit IRD numbers, add a leading 0"
         }
     }
 }
 
 class PersonalInformationViewController: UIViewController {
-    private let fullNameField = TextFieldComponent(title: "Full Name")
-    private let emailAddressField = TextFieldComponent(title: "Email Address", placeholder: "name@example.com")
-    private let phoneNumberField = TextFieldComponent(title: "Phone Number", placeholder: "+64 21 123 456")
-    private let genderField = MenuComponent(title: "Gender", placeholder: "Select", options: Gender.allCases)
+    private let fullNameField = TextFieldComponent(title: "Full Name") { fullName in
+        if fullName == nil || fullName?.trimmingCharacters(in: .whitespacesAndNewlines) == "" {
+            throw ValidationError.fullNameInvalid
+        }
+    }
+    
+    private let emailAddressField = TextFieldComponent(title: "Email Address", placeholder: "name@example.com") { email in
+        if !PersonalInformationViewController.isValidEmail(email) {
+            throw ValidationError.emailInvalid
+        }
+    }
+    
+    private let phoneNumberField = TextFieldComponent(title: "Phone Number", placeholder: "+64 21 123 456") { phoneNumber in
+        if !PersonalInformationViewController.isValidNZPhoneNumber(phoneNumber) {
+            throw ValidationError.phoneNumberInvalid
+        }
+    }
+    
+    private let genderField = GenderFieldComponent(title: "Gender", placeholder: "Select") { gender in
+        if gender == nil {
+            throw ValidationError.genderInvalid
+        }
+    }
+    
     private let addressField = TextFieldComponent(title: "Address", placeholder: "123 Example Street")
+    
+    private lazy var fieldOrder: [FormFieldComponent] = [fullNameField, emailAddressField, phoneNumberField, genderField, addressField]
     
     private let saveButton = {
         let button = RoundedButton(title: "Save")
@@ -56,6 +94,10 @@ class PersonalInformationViewController: UIViewController {
     
     private var loan: Loan
     
+    private let scrollView: UIScrollView = UIScrollView()
+    
+    private let bottomContentStack = StackView(arrangedSubviews: [], axis: .vertical)
+    
     private func setupSubviews() {
         title = "Personal Information"
         view.backgroundColor = .systemBackground
@@ -64,41 +106,80 @@ class PersonalInformationViewController: UIViewController {
         
         let verticalStack = StackView(arrangedSubviews: [fullNameField, emailAddressField, phoneNumberField, genderField, addressField], axis: .vertical)
         
-        view.addSubview(verticalStack)
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(verticalStack)
         
         let horizontalStack = StackView(arrangedSubviews: [saveButton, nextButton], axis: .horizontal, layoutMargins: .zero)
         horizontalStack.spacing = 16.0
-        let bottomContentStack = StackView(arrangedSubviews: [horizontalStack, progressIndicator], axis: .vertical)
+        
+        bottomContentStack.addArrangedSubview(horizontalStack)
+        bottomContentStack.addArrangedSubview(progressIndicator)
         view.addSubview(bottomContentStack)
+        bottomContentStack.backgroundColor = .systemBackground
+        bottomContentStack.layer.shadowColor = UIColor.label.cgColor
+        bottomContentStack.layer.shadowOpacity = 0.1
         
         NSLayoutConstraint.activate([
-            view.safeAreaLayoutGuide.topAnchor.constraint(equalTo: verticalStack.topAnchor),
-            view.safeAreaLayoutGuide.leadingAnchor.constraint(equalTo: verticalStack.leadingAnchor),
-            view.safeAreaLayoutGuide.trailingAnchor.constraint(equalTo: verticalStack.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            
+            verticalStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            verticalStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            verticalStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            verticalStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            
+            verticalStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
             
             bottomContentStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             bottomContentStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
-            bottomContentStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            bottomContentStack.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         
         saveButton.addTarget(self, action: #selector(saveLoan), for: .touchUpInside)
         nextButton.addTarget(self, action: #selector(moveToFinancialInformation), for: .touchUpInside)
         
         fullNameField.textContentType = .name
-        fullNameField.returnKeyType = .next
-        fullNameField.delegate = self
+        fullNameField.autocapitalizationType = .words
+        fullNameField.value = loan.fullName
         emailAddressField.textContentType = .emailAddress
         emailAddressField.keyboardType = .emailAddress
         emailAddressField.autocapitalizationType = .none
-        emailAddressField.returnKeyType = .next
-        emailAddressField.delegate = self
+        emailAddressField.value = loan.emailAddress
         phoneNumberField.textContentType = .telephoneNumber
         phoneNumberField.keyboardType = .phonePad
-        phoneNumberField.returnKeyType = .next
-        phoneNumberField.delegate = self
+        phoneNumberField.showToolbar = true
+        phoneNumberField.value = loan.phoneNumber
+        genderField.showToolbar = true
+        genderField.value = loan.gender
         addressField.textContentType = .fullStreetAddress
-        addressField.returnKeyType = .done
-        addressField.delegate = self
+        addressField.value = loan.address
+        
+        for index in 0 ..< fieldOrder.count {
+            let nextIndex = index + 1
+            let currentField = fieldOrder[index]
+            if nextIndex > fieldOrder.count - 1 {
+                currentField.returnKeyType = .done
+                currentField.onMoveToNextFormField = {
+                    currentField.resignFirstResponder()
+                }
+                continue
+            }
+            let nextField = fieldOrder[nextIndex]
+            currentField.returnKeyType = .next
+            currentField.onMoveToNextFormField = { [unowned nextField] in
+                nextField.becomeFirstResponder()
+            }
+        }
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let bottomInset = bottomContentStack.bounds.height - bottomContentStack.safeAreaInsets.bottom
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+        scrollView.scrollIndicatorInsets = scrollView.contentInset
     }
     
     @objc func cancel() {
@@ -106,11 +187,11 @@ class PersonalInformationViewController: UIViewController {
     }
     
     private func updateLoan() {
-        loan.fullName = fullNameField.text
-        loan.emailAddress = emailAddressField.text
-        loan.phoneNumber = phoneNumberField.text
-        loan.address = addressField.text
-        loan.gender = genderField.selectedOption
+        loan.fullName = fullNameField.value
+        loan.emailAddress = emailAddressField.value
+        loan.phoneNumber = phoneNumberField.value
+        loan.address = addressField.value
+        loan.gender = genderField.value
     }
     
     @objc func saveLoan() {
@@ -128,31 +209,15 @@ class PersonalInformationViewController: UIViewController {
     }
     
     func validateFields() -> Bool {
-        var isValid: Bool = true
-        if fullNameField.text == nil || fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) == "" {
-            fullNameField.error = ValidationError.fullNameInvalid
-            isValid = false
-        }
-        
-        if !isValidEmail(emailAddressField.text) {
-            emailAddressField.error = ValidationError.emailInvalid
-            isValid = false
-        }
-        
-        if !isValidNZPhoneNumber(phoneNumberField.text) {
-            phoneNumberField.error = ValidationError.emailInvalid
-            isValid = false
-        }
-        
-        if genderField.selectedOption == nil {
-            genderField.error = ValidationError.genderInvalid
-            isValid = false
+        var isValid = true
+        for field in fieldOrder {
+            isValid = field.validate() && isValid
         }
         
         return isValid
     }
     
-    func isValidEmail(_ email: String?) -> Bool {
+    private static func isValidEmail(_ email: String?) -> Bool {
         guard let email else {
             return false
         }
@@ -161,7 +226,7 @@ class PersonalInformationViewController: UIViewController {
         return emailTest.evaluate(with: email)
     }
     
-    func isValidNZPhoneNumber(_ phoneNumber: String?) -> Bool {
+    private static func isValidNZPhoneNumber(_ phoneNumber: String?) -> Bool {
         guard let phoneNumber else {
             return false
         }
@@ -178,45 +243,6 @@ class PersonalInformationViewController: UIViewController {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-}
-
-extension PersonalInformationViewController: UITextFieldDelegate {
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        switch textField {
-        case fullNameField.textField:
-            emailAddressField.textField.becomeFirstResponder()
-            
-        case emailAddressField.textField:
-            phoneNumberField.textField.becomeFirstResponder()
-            
-        case phoneNumberField.textField:
-            phoneNumberField.textField.resignFirstResponder()
-            
-        case addressField.textField:
-            addressField.textField.resignFirstResponder()
-            
-        default: break
-        }
-        return false
-    }
-    
-    func textFieldDidBeginEditing(_ textField: UITextField) {
-        switch textField {
-        case fullNameField.textField:
-            fullNameField.error = nil
-            
-        case emailAddressField.textField:
-            emailAddressField.error = nil
-            
-        case phoneNumberField.textField:
-            phoneNumberField.error = nil
-            
-        case addressField.textField:
-            addressField.error = nil
-            
-        default: break
-        }
     }
 }
 

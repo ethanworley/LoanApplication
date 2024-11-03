@@ -9,7 +9,20 @@ import UIKit
 class HomeTableViewCell: TableViewCell {
     
     //like name, loan amount, and date submitted.
-    private let nameLabel = Label(font: .preferredFont(forTextStyle: .title1))
+    private let nameLabel = {
+        let label = Label(font: .preferredFont(forTextStyle: .title1))
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return label
+    }()
+    
+    private let draftLabel = {
+        let label = Label(font: .preferredFont(forTextStyle: .title1))
+        label.text = "Draft"
+        label.textColor = .systemGray3
+        label.textAlignment = .right
+        label.setContentHuggingPriority(.required, for: .horizontal)
+        return label
+    }()
     
     private let loanAmountLabel = Label(font: .preferredFont(forTextStyle: .title2))
     
@@ -24,6 +37,7 @@ class HomeTableViewCell: TableViewCell {
                 return
             }
             
+            draftLabel.isHidden = viewModel.isComplete
             nameLabel.text = viewModel.name
             loanAmountLabel.text = viewModel.loanAmount
             dateSubmittedLabel.text = viewModel.dateSubmitted
@@ -41,7 +55,9 @@ class HomeTableViewCell: TableViewCell {
     }
     
     func setupSubviews() {
-        let stackView = StackView(arrangedSubviews: [nameLabel, loanAmountLabel, dateSubmittedLabel], axis: .vertical)
+        let horizontalStack = StackView(arrangedSubviews: [nameLabel, draftLabel], axis: .horizontal, layoutMargins: .zero)
+        horizontalStack.spacing = 10.0
+        let stackView = StackView(arrangedSubviews: [horizontalStack, loanAmountLabel, dateSubmittedLabel], axis: .vertical)
         contentView.addSubview(stackView)
         NSLayoutConstraint.activate([
             contentView.topAnchor.constraint(equalTo: stackView.topAnchor),
@@ -49,11 +65,11 @@ class HomeTableViewCell: TableViewCell {
             contentView.leadingAnchor.constraint(equalTo: stackView.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: stackView.trailingAnchor)
         ])
-        
-        viewModel = HomeTableViewModel(name: "Ethan Worley", loanAmount: 1_000_000, dateSubmitted: .now)
     }
 }
 
 #Preview {
-    return HomeTableViewCell()
+    let homeTableViewCell = HomeTableViewCell()
+    homeTableViewCell.viewModel = HomeTableViewModel(name: "Preview Loan Cell", loanAmount: 1_000, dateSubmitted: .now, isComplete: false)
+    return homeTableViewCell
 }
